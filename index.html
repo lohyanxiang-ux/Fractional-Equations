@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Boss Battle: Tactical Legend</title>
+    <style>
+        :root {
+            --primary: #4ecca3;
+            --danger: #ff416c;
+            --recovery: #00d2ff;
+            --bg-strike: #1a1a2e;
+            --bg-heal: #0f3d30;
+            --panel: #16213e;
+        }
+
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: var(--bg-strike); 
+            color: white; 
+            text-align: center; 
+            margin: 0; 
+            overflow: hidden; 
+            height: 100vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            transition: background 0.4s ease;
+        }
+
+        /* Heal Mode Override */
+        body.heal-active { background: var(--bg-heal); }
+        body.heal-active #game-container { border-color: var(--recovery); box-shadow: 0 0 20px rgba(0, 210, 255, 0.2); }
+
+        #game-container { 
+            width: 95%; max-width: 500px; height: 96vh; background: var(--panel); padding: 15px; 
+            border: 2px solid var(--primary); border-radius: 12px; display: flex; flex-direction: column; 
+            justify-content: space-between; position: relative; box-sizing: border-box; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            overflow: hidden; 
+        }
+
+        /* HP Bars */
+        .hp-bar-outer { position: relative; width: 100%; height: 28px; background: #333; border-radius: 14px; border: 2px solid #fff; overflow: hidden; margin: 5px 0; }
+        .hp-fill { width: 100%; height: 100%; transition: width 0.4s ease-out; }
+        #boss-fill { background: linear-gradient(90deg, var(--danger), #ff4b2b); }
+        #player-fill { background: linear-gradient(90deg, var(--recovery), #3a7bd5); }
+        
+        .hp-label-centered {
+            position: absolute; width: 100%; top: 0; left: 0; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.9rem; font-weight: bold; text-shadow: 1px 1px 3px #000;
+            color: white; pointer-events: none; z-index: 5;
+        }
+
+        #boss-name { font-size: 1.6rem; color: var(--danger); font-weight: bold; margin: 0; text-shadow: 0 0 10px rgba(255, 65, 108, 0.3); }
+        #level-tag { font-size: 0.9rem; color: var(--primary); font-weight: bold; margin-bottom: 5px; }
+
+        /* --- PURE CSS FRACTION STYLING (No MathJax) --- */
+        #equation-display { 
+            font-size: 2rem; 
+            min-height: 120px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            background: rgba(255,255,255,0.05); 
+            border-radius: 8px; 
+            margin: 10px 0; 
+            padding: 15px;
+            transition: 0.3s;
+        }
+        
+        .frac { 
+            display: inline-block; 
+            vertical-align: middle; 
+            text-align: center; 
+            margin: 0 8px;
+        }
+        .num { 
+            display: block; 
+            border-bottom: 3px solid white; /* The fraction line */
+            padding: 2px 5px; 
+            color: white;
+        }
+        .den { 
+            display: block; 
+            padding: 2px 5px; 
+            color: white;
+        }
+        .op { 
+            margin: 0 8px; 
+            display: inline-block; 
+            vertical-align: middle; 
+            font-weight: bold;
+            color: white;
+        }
+        
+        /* Input Styling */
+        .input-area { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 10px; }
+        input { 
+            font-size: 1.8rem; padding: 10px; width: 120px; text-align: center; border-radius: 8px; 
+            border: 2px solid var(--primary); background: #0b1e36; color: #fff; outline: none; 
+            box-shadow: 0 0 10px rgba(78, 204, 163, 0.1);
+        }
+        input:focus { border-color: #fff; box-shadow: 0 0 15px rgba(78, 204, 163, 0.4); }
+
+        #timer-box { font-size: 0.9rem; color: #f1c40f; font-weight: bold; margin-bottom: 5px; }
+        #combo-box { font-size: 1.1rem; color: #e67e22; font-weight: bold; min-height: 24px; }
+        #feedback { font-weight: bold; height: 60px; font-size: 0.95rem; margin: 5px 0; display: flex; align-items: center; justify-content: center; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+
+        /* Buttons */
+        .action-area { display: flex; flex-direction: column; gap: 10px; margin-top: 5px; }
+        .main-btn { 
+            font-size: 1.3rem; padding: 14px 0; width: 100%; cursor: pointer; 
+            border: none; font-weight: bold; border-radius: 10px; transition: 0.2s;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        .main-btn:active { transform: scale(0.98); }
+        #attack-btn { background: var(--primary); color: #1a1a2e; box-shadow: 0 4px 0 #3aa885; }
+        #heal-btn { background: var(--recovery); color: white; display: none; box-shadow: 0 4px 0 #009acb; }
+
+        /* Skill Selector */
+        .final-boss-ui { display: none; flex-wrap: wrap; gap: 5px; justify-content: center; margin-bottom: 5px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px; }
+        .lvl-btn { font-size: 0.8rem; padding: 8px; background: #8e44ad; color: white; border: none; border-radius: 4px; flex: 1; min-width: 60px; cursor: pointer; font-weight: bold; transition: 0.2s; opacity: 0.7; }
+        .lvl-btn:hover { opacity: 1; }
+        .lvl-btn.active-skill { border: 2px solid #f1c40f; background: #6c3483; opacity: 1; transform: scale(1.05); }
+
+        .player-section { margin-bottom: 5px; width: 100%; }
+
+        .overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; flex-direction: column; justify-content: center; align-items: center; padding: 30px; box-sizing: border-box; }
+        .overlay p { font-style: italic; color: #ccc; margin-bottom: 20px; line-height: 1.6; max-width: 450px;}
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div class="boss-section">
+            <div id="boss-name">Fraction Golem</div>
+            <div id="level-tag">STAGE 1</div>
+            <div class="hp-bar-outer">
+                <div id="boss-fill" class="hp-fill"></div>
+                <div id="boss-hp-text" class="hp-label-centered">BOSS HP: 100 / 100</div>
+            </div>
+        </div>
+
+        <div id="final-boss-controls" class="final-boss-ui">
+            <button class="lvl-btn" onclick="setFinalLvl(1)">LVL 1</button>
+            <button class="lvl-btn" onclick="setFinalLvl(2)">LVL 2</button>
+            <button class="lvl-btn" onclick="setFinalLvl(3)">LVL 3</button>
+            <button class="lvl-btn" onclick="setFinalLvl(4)">LVL 4</button>
+            <button class="lvl-btn" onclick="setFinalLvl(5)">LVL 5</button>
+            <button class="lvl-btn" onclick="setFinalLvl(6)">LVL 6</button>
+        </div>
+
+        <div>
+            <div id="combo-box"></div>
+            <div id="timer-box">Critical Window: 20s</div>
+            
+            <div id="equation-display"></div>
+            
+            <div class="input-area">
+                <span id="var-label" style="font-size: 1.8rem; font-weight:bold;">x</span> 
+                <span style="font-size: 1.8rem; margin: 0 5px;">=</span> 
+                <input type="number" id="answer-input" autocomplete="off">
+            </div>
+            
+            <div class="action-area">
+                <button id="attack-btn" class="main-btn" onclick="handleAction('strike')">STRIKE</button>
+                <button id="heal-btn" class="main-btn" onclick="handleAction('heal')">HEAL</button>
+            </div>
+            
+            <div id="feedback"></div>
+        </div>
+
+        <div class="player-section">
+            <div class="hp-bar-outer">
+                <div id="player-fill" class="hp-fill"></div>
+                <div id="player-hp-text" class="hp-label-centered">PLAYER HP: 100 / 100</div>
+            </div>
+        </div>
+
+        <div id="transition-overlay" class="overlay">
+            <h2 id="trans-title" style="color: var(--primary);">Victory!</h2>
+            <p id="trans-flavor" style="font-style: italic; color: #ccc;"></p>
+            <p id="trans-msg"></p>
+            <button onclick="closeTransition()" style="padding: 12px 24px; cursor: pointer; background: var(--primary); border: none; font-weight: bold; border-radius: 5px;">Continue</button>
+        </div>
+
+        <div id="game-over-overlay" class="overlay">
+            <h2 style="color: var(--danger);">DEFEAT</h2>
+            <div id="defeat-summary"></div>
+            <button onclick="location.reload()" style="margin-top:20px; padding: 12px 24px; cursor: pointer;">Revive</button>
+        </div>
+
+        <div id="victory-screen" class="overlay">
+            <h1 style="color: #f1c40f;">GAME CLEARED!</h1>
+            <div id="victory-summary" style="line-height: 1.8; margin-bottom: 20px;"></div>
+            <button onclick="location.reload()" style="padding: 12px 24px; cursor: pointer; background: var(--primary); border: none; font-weight: bold; border-radius: 5px;">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        let level = 1, bossHp = 100, playerHp = 100, solution = 0;
+        let combo = 0, timeLeft = 20, timerInterval, regenInterval;
+        let isFinalBoss = false, isHealMode = false;
+        let finalSelectedLvl = 1;
+        let totalCorrect = 0, totalCrits = 0;
+        let wrongStreak = 0;
+
+        const bosses = [
+            { name: "Fraction Golem", flavor: "It crumbles into dust. You have shattered the rocky exterior to reveal the simple integers within." },
+            { name: "Variable Viper", flavor: "You untangled its logic. The serpent's coils loosen as you solve for the unknown, ending its reign of confusion." },
+            { name: "Coefficient King", flavor: "The crown falls. His multipliers have been divided, and his power reduced to one. Long live the logic!" },
+            { name: "Denominator Demon", flavor: "Banished to the abyss! You found common ground where there was none and balanced the chaos." },
+            { name: "Common Denominator", flavor: "Divided and conquered. The great unifier has been simplified to its lowest terms." },
+            { name: "LCD Overlord", flavor: "Its complexity was no match for you. The least common multiple has been found, and order is restored." },
+            { name: "ALGEBRA LORD", flavor: "The Equation Realm is saved! You have balanced the ultimate equation and proven yourself a legend." }
+        ];
+
+        // --- FLAVOR TEXT ---
+        const healFailMessages = [
+            "You drank the wrong potion!",
+            "The potion bottle was empty!",
+            "You spilled the elixir!",
+            "The cork was stuck!",
+            "It was just grape juice. No healing."
+        ];
+
+        const normalAttacks = [
+            "Threw a fireball!",
+            "Slashed with your sword!",
+            "Fired an arcane missile!",
+            "Launched a lightning bolt!",
+            "Struck with a warhammer!",
+            "Blasted with energy!"
+        ];
+
+        const criticalAttacks = [
+            "CRITICAL HIT! Struck a weak point!",
+            "MAXIMUM POWER! A devastating blow!",
+            "PERFECT AIM! Pierced the armor!",
+            "ELEMENTAL BURST! Massive damage!",
+            "EXECUTION! The boss reels!"
+        ];
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            timeLeft = 20;
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer-box').innerText = timeLeft > 0 ? `Critical Window: ${timeLeft}s` : "Normal Power";
+                if (timeLeft <= 0) clearInterval(timerInterval);
+            }, 1000);
+        }
+
+        // Boss Auto-Regen
+        regenInterval = setInterval(() => {
+            const maxB = isFinalBoss ? 200 : 100;
+            if (bossHp > 0 && bossHp < maxB) {
+                bossHp = Math.min(maxB, bossHp + 1);
+                updateBars();
+            }
+        }, 2000);
+
+        function rInt(min, max) {
+            let n = Math.floor(Math.random() * (max - min + 1)) + min;
+            return n === 0 ? rInt(min, max) : n;
+        }
+
+        function cleanTerm(coeff, v) {
+            if (coeff === 1) return v;
+            if (coeff === -1) return `-${v}`;
+            return `${coeff}${v}`;
+        }
+
+        function formatOp(val) {
+            return val >= 0 ? `+ ${val}` : `- ${Math.abs(val)}`;
+        }
+
+        // --- HTML FRACTION GENERATOR ---
+        function fraction(num, den) {
+            return `<div class="frac"><span class="num">${num}</span><span class="den">${den}</span></div>`;
+        }
+
+        function getEqText(targetLvl) {
+            const vars = ['x', 'y', 'w', 'k'];
+            const curVar = vars[Math.floor(Math.random() * vars.length)];
+            document.getElementById('var-label').innerText = curVar;
+            solution = rInt(-8, 8); if (solution === 0) solution = 4;
+            let a, b, den1, den2, res;
+
+            switch(targetLvl) {
+                case 1: // x/d = r
+                    den1 = rInt(2, 8); res = solution; solution = den1 * res; 
+                    return `${fraction(curVar, den1)} <span class="op">=</span> ${res}`;
+                
+                case 2: // ax/d = r
+                    den1 = rInt(2, 6);
+                    // Ensure 'a' and 'den1' are not divisible by each other
+                    do {
+                        a = rInt(2, 5); 
+                    } while (a === den1 || a % den1 === 0 || den1 % a === 0);
+                    
+                    while((a * solution) % den1 !== 0) solution++;
+                    res = (a * solution) / den1; 
+                    return `${fraction(cleanTerm(a, curVar), den1)} <span class="op">=</span> ${res}`;
+                
+                case 3: // (ax + b) / d = r (Reverse Logic)
+                    a = rInt(1, 2); if(Math.random() > 0.5) a = -a;
+                    den1 = rInt(2, 5);
+                    res = rInt(-4, 4);
+                    // Reverse calc for b to avoid infinite loops
+                    b = (res * den1) - (a * solution);
+                    if (b === 0) { b = den1; res++; }
+                    return `${fraction(cleanTerm(a, curVar) + " " + formatOp(b), den1)} <span class="op">=</span> ${res}`;
+
+                case 4: // c / (x+b) = r
+                    b = rInt(-6, 6); let denom = solution + b;
+                    while(denom === 0) { solution++; denom = solution + b; }
+                    res = rInt(1, 4); if(Math.random()>0.5) res = -res;
+                    let num = res * denom;
+                    return `${fraction(num, curVar + " " + formatOp(b))} <span class="op">=</span> ${res}`;
+
+                case 5: // ax/d + bx/d = r
+                    den1 = rInt(2, 6); a = rInt(1, 4); b = rInt(1, 4); 
+                    let op5 = Math.random()>0.5 ? 1 : -1;
+                    while (a + (op5 * b) === 0) { b = rInt(1, 4); }
+                    res = ((a + (op5*b)) * solution) / den1;
+                    while(!Number.isInteger(res)) { solution++; res = ((a + (op5*b)) * solution) / den1; }
+                    
+                    let opSign = op5 === 1 ? "+" : "-";
+                    return `${fraction(cleanTerm(a, curVar), den1)} <span class="op">${opSign}</span> ${fraction(cleanTerm(b, curVar), den1)} <span class="op">=</span> ${res}`;
+
+                case 6: // x/d1 +/- (x+b)/d2 = res
+                    den1 = rInt(2, 3); den2 = rInt(4, 5); b = rInt(-4, 4); let op6 = Math.random()>0.5 ? 1 : -1;
+                    res = (solution/den1) + (op6*(solution+b)/den2);
+                    let att = 0; while(!Number.isInteger(res) && att < 30) { solution++; res = (solution/den1) + (op6*(solution+b)/den2); att++; }
+                    
+                    let opSign6 = op6 === 1 ? "+" : "-";
+                    return `${fraction(curVar, den1)} <span class="op">${opSign6}</span> ${fraction(curVar + " " + formatOp(b), den2)} <span class="op">=</span> ${res}`;
+                
+                default: return `${fraction(curVar, 2)} <span class="op">=</span> 4`; 
+            }
+        }
+
+        function getBaseDamage(lvl) {
+            if (lvl <= 2) return 6;
+            if (lvl <= 4) return 12;
+            return 18;
+        }
+
+        function generate() {
+            let activeLvl = level;
+            const body = document.body;
+
+            if (isHealMode) {
+                activeLvl = level > 1 ? rInt(1, level - 1) : 1;
+                
+                body.classList.add('heal-active');
+                document.getElementById('level-tag').innerText = `HEAL MODE (Lvl ${activeLvl})`;
+                document.getElementById('attack-btn').style.display = 'none';
+                document.getElementById('heal-btn').style.display = 'block';
+            } else {
+                if (isFinalBoss) activeLvl = finalSelectedLvl;
+                
+                body.classList.remove('heal-active');
+                document.getElementById('level-tag').innerText = isFinalBoss ? `FINAL STAGE` : `STAGE ${level}`;
+                document.getElementById('attack-btn').style.display = 'block';
+                // Only show heal button if HP is low
+                document.getElementById('heal-btn').style.display = playerHp < 100 ? 'block' : 'none';
+            }
+            
+            // Set equation using pure HTML
+            document.getElementById('equation-display').innerHTML = getEqText(activeLvl);
+            document.getElementById('boss-name').innerText = isFinalBoss ? bosses[6].name : bosses[level-1].name;
+
+            startTimer();
+        }
+
+        function handleAction(type) {
+            if (type === 'heal' && !isHealMode) {
+                isHealMode = true;
+                generate();
+                return;
+            }
+
+            const val = parseInt(document.getElementById('answer-input').value);
+            const feedback = document.getElementById('feedback');
+            if (isNaN(val)) return;
+
+            if (val === solution) {
+                totalCorrect++;
+                wrongStreak = 0;
+                
+                if (isHealMode) {
+                    playerHp = Math.min(100, playerHp + 10);
+                    feedback.innerHTML = `<span style="color:var(--recovery)">RECOVERY SUCCESS! +10 HP</span>`;
+                    isHealMode = false;
+                } else {
+                    combo++;
+                    let effectiveLvl = isFinalBoss ? finalSelectedLvl : level;
+                    let baseDmg = getBaseDamage(effectiveLvl);
+                    
+                    let totalDmg = baseDmg;
+                    if (combo === 2) totalDmg *= 2;
+                    else if (combo >= 3) totalDmg *= 3;
+                    
+                    let isCrit = false;
+                    if (timeLeft > 0) {
+                        totalDmg = Math.floor(totalDmg * 1.5);
+                        isCrit = true;
+                        totalCrits++;
+                    }
+                    
+                    bossHp -= totalDmg;
+                    
+                    let flavorText = isCrit 
+                        ? criticalAttacks[Math.floor(Math.random() * criticalAttacks.length)]
+                        : normalAttacks[Math.floor(Math.random() * normalAttacks.length)];
+                    
+                    feedback.innerHTML = `<span style="color:var(--primary)">${flavorText}<br>Dealt ${totalDmg} DMG!</span>`;
+                }
+                
+                updateBars();
+                if(bossHp > 0) generate();
+
+            } else {
+                combo = 0;
+                
+                if (isHealMode) {
+                    const msg = healFailMessages[Math.floor(Math.random() * healFailMessages.length)];
+                    feedback.innerHTML = `<span style="color:var(--danger)">${msg}</span>`;
+                    isHealMode = false;
+                    generate();
+                } else {
+                    wrongStreak++;
+                    if (wrongStreak >= 2) {
+                        playerHp -= 10;
+                        feedback.innerHTML = `<span style="color:var(--danger)">You missed! Boss deals 10 damage!</span>`;
+                        wrongStreak = 0;
+                        generate(); 
+                    } else {
+                        feedback.innerHTML = `<span style="color:var(--danger)">Missed! Watch out!</span>`;
+                    }
+                }
+                updateBars();
+            }
+
+            document.getElementById('answer-input').value = "";
+            document.getElementById('answer-input').focus();
+        }
+
+        function updateBars() {
+            if (bossHp <= 0) { 
+                bossHp = 0; 
+                isFinalBoss && level >= 7 ? showVictory() : showTransition();
+                return;
+            }
+            if (playerHp <= 0) { playerHp = 0; showGameOver(); return; }
+            
+            const maxB = isFinalBoss ? 200 : 100;
+            document.getElementById('boss-fill').style.width = (bossHp / maxB * 100) + "%";
+            document.getElementById('boss-hp-text').innerText = `BOSS HP: ${bossHp} / ${maxB}`;
+            
+            document.getElementById('player-fill').style.width = playerHp + "%";
+            document.getElementById('player-hp-text').innerText = `PLAYER HP: ${playerHp} / 100`;
+            
+            document.getElementById('combo-box').innerText = combo > 1 ? `${combo}x COMBO!` : "";
+            
+            if (!isHealMode) {
+                document.getElementById('heal-btn').style.display = playerHp < 100 ? "block" : "none";
+            }
+        }
+
+        function setFinalLvl(l) { 
+            finalSelectedLvl = l; 
+            document.querySelectorAll('.lvl-btn').forEach(b => b.classList.remove('active-skill'));
+            document.querySelectorAll('.lvl-btn')[l-1].classList.add('active-skill');
+            generate(); 
+        }
+
+        function showTransition() {
+            document.getElementById('transition-overlay').style.display = 'flex';
+            document.getElementById('trans-flavor').innerText = bosses[level-1].flavor;
+            document.getElementById('trans-msg').innerText = level < 7 ? `Next: ${bosses[level].name}` : "FINAL CHALLENGE!";
+        }
+
+        function closeTransition() {
+            document.getElementById('transition-overlay').style.display = 'none';
+            if (level < 6) { 
+                level++; bossHp = 100; 
+                generate();
+            }
+            else if (level == 6) { 
+                level++; bossHp = 200; isFinalBoss = true; 
+                document.getElementById('final-boss-controls').style.display = 'flex'; 
+                setFinalLvl(1);
+            }
+            else {
+                showVictory();
+            }
+            isHealMode = false;
+            updateBars();
+        }
+
+        function showGameOver() {
+            document.getElementById('game-over-overlay').style.display = 'flex';
+            document.getElementById('defeat-summary').innerHTML = `Defeated at Stage ${level}<br>Correct Answers: ${totalCorrect}`;
+        }
+
+        function showVictory() {
+            document.getElementById('victory-screen').style.display = 'flex';
+            document.getElementById('victory-summary').innerHTML = `
+                Total Correct: ${totalCorrect}<br>
+                Critical Hits: ${totalCrits}<br>
+                Status: LEGENDARY
+            `;
+        }
+
+        window.onload = generate;
+        document.getElementById('answer-input').onkeydown = (e) => { if(e.key === 'Enter') handleAction(isHealMode ? 'heal' : 'strike'); };
+    </script>
+</body>
+</html>
